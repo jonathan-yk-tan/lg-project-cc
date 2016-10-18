@@ -27,10 +27,11 @@ func (t *Request) Init(stub *shim.ChaincodeStub, function string, args []string)
 		&shim.ColumnDefinition{Name: "UID", Type: shim.ColumnDefinition_STRING, Key: true},
 		&shim.ColumnDefinition{Name: "DocJSON", Type: shim.ColumnDefinition_BYTES, Key: false},
 		&shim.ColumnDefinition{Name: "Status", Type: shim.ColumnDefinition_STRING, Key: false},
-    &shim.ColumnDefinition{Name: "Type", Type: shim.ColumnDefinition_STRING, Key: true},
+    &shim.ColumnDefinition{Name: "RequestType", Type: shim.ColumnDefinition_STRING, Key: true},
     &shim.ColumnDefinition{Name: "Requester", Type: shim.ColumnDefinition_STRING, Key: true},
+    &shim.ColumnDefinition{Name: "Permissions", Type: shim.ColumnDefinition_BYTES, Key: false},
     &shim.ColumnDefinition{Name: "CreatedAt", Type: shim.ColumnDefinition_STRING, Key: false},
-	})
+  })
 	if err != nil {
 		return nil, errors.New("Failed creating Request Table.")
 	}
@@ -42,7 +43,7 @@ func (t *Request) Init(stub *shim.ChaincodeStub, function string, args []string)
 //SubmitDoc () – Calls ValidateDoc internally and upon success inserts a new row in the table
 func (t *Request) SubmitNewRequest(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
 
-	if len(args) != 5 {
+	if len(args) != 6 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 6.")
 	}
 
@@ -51,8 +52,9 @@ func (t *Request) SubmitNewRequest(stub *shim.ChaincodeStub, args []string) ([]b
   status := args[2]
   requestType := args[3]
   requester :=args[4]
+  permissions :=[]byte(args[5])
 
-	//TODO: validate data
+	//TODO: Validate input
 
   //time
   createdTime := time.Now()
@@ -67,6 +69,7 @@ func (t *Request) SubmitNewRequest(stub *shim.ChaincodeStub, args []string) ([]b
       &shim.Column{Value: &shim.Column_String_{String_: status}},
 			&shim.Column{Value: &shim.Column_String_{String_: requestType}},
       &shim.Column{Value: &shim.Column_String_{String_: requester}},
+      &shim.Column{Value: &shim.Column_Bytes{Bytes: permissions}},
       &shim.Column{Value: &shim.Column_String_{String_: createdTime.Format(time.RFC3339)}}},
 	})
 
@@ -77,9 +80,55 @@ func (t *Request) SubmitNewRequest(stub *shim.ChaincodeStub, args []string) ([]b
 	return nil, err
 }
 
-// GetJSON () – returns as JSON a single document w.r.t. the UID
+// GetRequestDocument () – returns as JSON a single document w.r.t. the UID
 func (t *Request) GetJSON(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
 
+	if len(args) != 2 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 1.")
+	}
+
+	uid := args[0]
+  //requestType := args[1]
+  requester := args[1]
+  requestType := "new"
+  //requester := "testUser"
+	// Get the row pertaining to this UID
+  var columns []shim.Column
+  	col1 := shim.Column{Value: &shim.Column_String_{String_: uid}}
+  	columns = append(columns, col1)
+
+  	col2 := shim.Column{Value: &shim.Column_String_{String_: requestType}}
+  	columns = append(columns, col2)
+    col3 := shim.Column{Value: &shim.Column_String_{String_: requester}}
+    columns = append(columns, col3)
+
+  	row, err := stub.GetRow("RequestTable", columns)
+  	if err != nil {
+  		return nil, fmt.Errorf("Error: Failed retrieving document with uid %s. Error %s", uid, err.Error())
+  	}
+
+  	// GetRows returns empty message if key does not exist
+  	if len(row.Columns) == 0 {
+  		return nil, nil
+  	}
+    fmt.Printf("UID\n")
+    fmt.Printf(`"UID": "`+row.Columns[0].GetString_()+`"`)
+    str := `{ "uid": "`+row.Columns[0].GetString_()+`", "data": ` + string(row.Columns[1].GetBytes())+`, "status": "` + row.Columns[2].GetString_()+`", "type": "` + row.Columns[3].GetString_()+`", "requester": "` + row.Columns[4].GetString_() +`", "permissions": ` + string(row.Columns[5].GetBytes())+`, "createdAt": "` + row.Columns[6].GetString_() +`"  }`
+    fmt.Printf("JSON\n")
+    fmt.Printf(str)
+    //str := `{ "UID": `+row.Columns[0].GetString_()+`  }`
+  	return []byte(str), nil
+
+}
+
+// GetRequestDocument () – returns as JSON a single document w.r.t. the UID
+func (t *Request) ApproveRequest(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+    return nil,nil
+}
+
+/*
+func (t *Request) GetRequests(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+
 	if len(args) != 1 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 1.")
 	}
@@ -109,43 +158,12 @@ func (t *Request) GetJSON(stub *shim.ChaincodeStub, args []string) ([]byte, erro
   	if len(row.Columns) == 0 {
   		return nil, nil
   	}
+    reqDoc := Request{
+	              UID: row.Columns[0].GetString_(),
+              	docJSON: row.Columns[1].GetBytes(),
+              	status:  row.Columns[2].GetString_(),
+              	requestType:   row.Columns[3].GetString_(),
+                requester: row.Columns[4].GetString_()}
+  	return reqDoc, nil
 
-  	return row.Columns[1].GetBytes(), nil
-
-}
-
-func (t *Request) GetRequestStatus(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-
-	if len(args) != 1 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 1.")
-	}
-
-	UID := args[0]
-  //requestType := args[1]
-  //requester := args[2]
-  requestType := "new"
-  requester := "testUser"
-
-	// Get the row pertaining to this UID
-  var columns []shim.Column
-  	col1 := shim.Column{Value: &shim.Column_String_{String_: UID}}
-  	columns = append(columns, col1)
-
-  	col2 := shim.Column{Value: &shim.Column_String_{String_: requestType}}
-  	columns = append(columns, col2)
-    col3 := shim.Column{Value: &shim.Column_String_{String_: requester}}
-    columns = append(columns, col3)
-
-  	row, err := stub.GetRow("RequestTable", columns)
-  	if err != nil {
-  		return nil, fmt.Errorf("Error: Failed retrieving document with UID %s. Error %s", UID, err.Error())
-  	}
-
-  	// GetRows returns empty message if key does not exist
-  	if len(row.Columns) == 0 {
-  		return nil, nil
-  	}
-
-  	return []byte(row.Columns[4].GetString_()), nil
-
-}
+}*/
