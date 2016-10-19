@@ -86,6 +86,8 @@ func (t *SimpleChaincode) Invoke(stub *shim.ChaincodeStub, function string, args
 		return t.add_thing(stub, args)
 	} else if function == "submit_new_request" {
 		return t.request.SubmitNewRequest(stub,args)
+	} else if function == "approve_new_request" {
+		return t.request.ApproveRequest(stub,args)
 	}
 
 	return nil, errors.New("Received unknown invoke function name")
@@ -100,10 +102,6 @@ func (t *SimpleChaincode) Query(stub *shim.ChaincodeStub, function string, args 
 
 	if function == "get_user" {
 		return t.get_user(stub, args[1])
-	} else if function == "get_thing" {
-		return t.get_thing(stub, args)
-	} else if function == "get_all_things" {
-		return t.get_all_things(stub, args)
 	} else if function == "authenticate" {
 		return t.authenticate(stub, args)
 	} else if function == "get_request_json" {
@@ -250,54 +248,6 @@ func (t *SimpleChaincode) get_user(stub *shim.ChaincodeStub, userID string) ([]b
 
 	return bytes, nil
 
-}
-
-func (t *SimpleChaincode) get_thing(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-
-	//Args
-	//			0
-	//		thingID
-
-	bytes, err := stub.GetState(args[0])
-
-	if err != nil {
-		return nil, errors.New("Error getting from ledger")
-	}
-
-	return bytes, nil
-
-}
-
-func (t *SimpleChaincode) get_all_things(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-
-	indexAsBytes, err := stub.GetState(thingsIndexStr)
-	if err != nil {
-		return nil, errors.New("Failed to get " + thingsIndexStr)
-	}
-
-	// Unmarshal the index
-	var thingsIndex []string
-	json.Unmarshal(indexAsBytes, &thingsIndex)
-
-	var things []Thing
-	for _, thing := range thingsIndex {
-
-		bytes, err := stub.GetState(thing)
-		if err != nil {
-			return nil, errors.New("Unable to get thing with ID: " + thing)
-		}
-
-		var t Thing
-		json.Unmarshal(bytes, &t)
-		things = append(things, t)
-	}
-
-	thingsAsJsonBytes, _ := json.Marshal(things)
-	if err != nil {
-		return nil, errors.New("Could not convert things to JSON ")
-	}
-
-	return thingsAsJsonBytes, nil
 }
 
 func (t *SimpleChaincode) authenticate(stub *shim.ChaincodeStub, args []string) ([]byte, error) {

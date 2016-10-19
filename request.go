@@ -121,9 +121,53 @@ func (t *Request) GetJSON(stub *shim.ChaincodeStub, args []string) ([]byte, erro
 
 }
 
-// GetRequestDocument () – returns as JSON a single document w.r.t. the UID
 func (t *Request) ApproveRequest(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-    return nil,nil
+
+	if len(args) != 2 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 1.")
+	}
+
+	uid := args[0]
+	//requestType := args[1]
+	requester := args[1]
+	requestType := "new"
+	//requester := "testUser"
+	// Get the row pertaining to this UID
+	var columns []shim.Column
+		col1 := shim.Column{Value: &shim.Column_String_{String_: uid}}
+		columns = append(columns, col1)
+
+		col2 := shim.Column{Value: &shim.Column_String_{String_: requestType}}
+		columns = append(columns, col2)
+		col3 := shim.Column{Value: &shim.Column_String_{String_: requester}}
+		columns = append(columns, col3)
+
+		row, err := stub.GetRow("RequestTable", columns)
+		if err != nil {
+			return nil, fmt.Errorf("Error: Failed retrieving document with uid %s. Error %s", uid, err.Error())
+		}
+
+		// GetRows returns empty message if key does not exist
+		if len(row.Columns) == 0 {
+			return nil, nil
+		}
+		//update status
+		ok, err := stub.ReplaceRow("RequestTable", shim.Row{
+			Columns: []*shim.Column{
+				&shim.Column{Value: &shim.Column_String_{String_: row.Columns[0].GetString_()}},
+				&shim.Column{Value: &shim.Column_Bytes{Bytes: row.Columns[1].GetBytes()}},
+				&shim.Column{Value: &shim.Column_String_{String_: "approved"}},
+				&shim.Column{Value: &shim.Column_String_{String_: row.Columns[3].GetString_()}},
+				&shim.Column{Value: &shim.Column_String_{String_: row.Columns[4].GetString_()}},
+				&shim.Column{Value: &shim.Column_Bytes{Bytes: row.Columns[5].GetBytes()}},
+				&shim.Column{Value: &shim.Column_String_{String_: row.Columns[6].GetString_()}}},
+		})
+
+		if !ok && err == nil {
+			return nil, errors.New("Error updatig.")
+		}
+
+		return nil, err
 }
 
 /*
