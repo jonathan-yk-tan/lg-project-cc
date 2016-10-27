@@ -9,7 +9,7 @@ import (
 	"os"
 )
 
-var logger = shim.NewLogger("fabric-boilerplate")
+var logger = shim.NewLogger("lg-project")
 //==============================================================================================================================
 //	 Structure Definitions
 //==============================================================================================================================
@@ -18,6 +18,7 @@ var logger = shim.NewLogger("fabric-boilerplate")
 //==============================================================================================================================
 type SimpleChaincode struct {
 	request Request
+	document Document
 }
 
 type ECertResponse struct {
@@ -36,10 +37,6 @@ type User struct {
 	EmailAddress string   `json:"emailAddress"`
 }
 
-type Thing struct {
-	Id          string `json:"id"`
-	Description string `json:"description"`
-}
 
 //=================================================================================================================================
 //  Index collections - In order to create new IDs dynamically and in progressive sorting
@@ -64,9 +61,8 @@ type Thing struct {
 //    if err != nil { return nil, errors.New("Error storing new signaturesIndex into ledger") }
 //=================================================================================================================================
 var usersIndexStr = "_users"
-var thingsIndexStr = "_things"
 
-var indexes = []string{usersIndexStr, thingsIndexStr}
+var indexes = []string{usersIndexStr}
 
 //==============================================================================================================================
 //	Invoke - Called on chaincode invoke. Takes a function name passed and calls that function. Passes the
@@ -82,12 +78,14 @@ func (t *SimpleChaincode) Invoke(stub *shim.ChaincodeStub, function string, args
 		return t.reset_indexes(stub, args)
 	} else if function == "add_user" {
 		return t.add_user(stub, args)
-	} else if function == "add_thing" {
-		return t.add_thing(stub, args)
 	} else if function == "submit_new_request" {
 		return t.request.SubmitNewRequest(stub,args)
 	} else if function == "approve_new_request" {
 		return t.request.ApproveRequest(stub,args)
+	} else if function == "issue_document" {
+		return t.document.IssueDocument(stub,args)
+	}else if function == "cancel_lg_document" {
+		return t.document.CancelLGDocument(stub,args)
 	}
 
 	return nil, errors.New("Received unknown invoke function name")
@@ -106,6 +104,10 @@ func (t *SimpleChaincode) Query(stub *shim.ChaincodeStub, function string, args 
 		return t.authenticate(stub, args)
 	} else if function == "get_request_json" {
 		return t.request.GetJSON(stub,args)
+	}else if function == "get_lg_document_json" {
+		return t.document.GetLgJSON(stub,args)
+	}else if function == "get_new_requests" {
+		return t.request.GetNewRequests(stub,args)
 	}
 	return nil, errors.New("Received unknown query function name")
 }
@@ -117,7 +119,7 @@ func (t *SimpleChaincode) Query(stub *shim.ChaincodeStub, function string, args 
 func main() {
 
 	// LogDebug, LogInfo, LogNotice, LogWarning, LogError, LogCritical (Default: LogDebug)
-	logger.SetLevel(shim.LogInfo)
+	logger.SetLevel(shim.LogDebug)
 
 	logLevel, _ := shim.LogLevel(os.Getenv("SHIM_LOGGING_LEVEL"))
 	shim.SetLoggingLevel(logLevel)
@@ -135,6 +137,8 @@ func main() {
 func (t *SimpleChaincode) Init(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
 
 	t.request.Init(stub, function, args)
+
+		t.document.Init(stub, function, args)
 	return nil, nil
 }
 
@@ -212,26 +216,6 @@ func (t *SimpleChaincode) add_user(stub *shim.ChaincodeStub, args []string) ([]b
 	}
 
 	return nil, nil
-}
-
-func (t *SimpleChaincode) add_thing(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-
-	// args
-	// 		0			1
-	//	   index	   thing JSON object (as string)
-
-	id, err := append_id(stub, thingsIndexStr, args[0], false)
-	if err != nil {
-		return nil, errors.New("Error creating new id for thing " + args[0])
-	}
-
-	err = stub.PutState(string(id), []byte(args[1]))
-	if err != nil {
-		return nil, errors.New("Error putting thing data on ledger")
-	}
-
-	return nil, nil
-
 }
 
 //==============================================================================================================================
